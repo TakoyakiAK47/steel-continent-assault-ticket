@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STEEL CONTINENT ASSAULT</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;700&family=Exo+2:ital,wght@0,700;1,700&display=swap');
+
+        :root {
+            --pv-cyan: #00e5ff; 
+            --pv-blue: #0091ea;
+            --pv-white: #f0f4ff;
+            --pv-sunset: #4a148c;
+            --pv-orange: #ffab40; 
+            --pv-green: #00ff88;
+            --pv-red: #ff3d00;
+            --pv-dark-bg: #020812;
+            --pv-glass: rgba(0, 229, 255, 0.03);
+            --pv-border: rgba(0, 229, 255, 0.3);
+            --text-main: #e1f5fe;
+        }
+
+        * { box-sizing: border-box; user-select: none; }
+
+        body {
+            background-color: var(--pv-dark-bg);
+            background-image: 
+                radial-gradient(circle at 50% -20%, #01579b, transparent),
+                linear-gradient(180deg, #020812 0%, #001220 100%);
+            color: var(--text-main);
+            font-family: 'Chakra Petch', sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 15px;
+            overflow-x: hidden;
+        }
+
+        body::after {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.05) 0px, rgba(0,0,0,0.05) 1px, transparent 1px, transparent 2px);
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 420px;
+            background: rgba(5, 15, 25, 0.85);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--pv-border);
+            border-top: 4px solid var(--pv-cyan);
+            box-shadow: 0 0 40px rgba(0, 229, 255, 0.15);
+            padding: 25px;
+            position: relative;
+            clip-path: polygon(0 0, 95% 0, 100% 5%, 100% 100%, 5% 100%, 0 95%);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--pv-cyan);
+            padding-bottom: 8px;
+        }
+
+        .header-title {
+            font-family: 'Exo 2', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 800;
+            font-style: italic;
+            color: var(--pv-white);
+            text-shadow: 0 0 10px var(--pv-cyan);
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .timer-section {
+            text-align: center;
+            margin-bottom: 25px;
+            position: relative;
+        }
+
+        .gauge-container {
+            position: relative;
+            width: 240px;
+            height: 240px;
+            margin: 0 auto;
+        }
+
+        .gauge-svg { transform: rotate(-90deg); }
+        .gauge-bg { fill: none; stroke: rgba(255, 255, 255, 0.03); stroke-width: 4; }
+        .gauge-progress {
+            fill: none;
+            stroke: url(#pv-gradient);
+            stroke-width: 6;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1s linear;
+        }
+
+        .timer-info {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+        }
+
+        .clock-main {
+            display: block;
+            font-size: 3.2rem;
+            font-weight: 700;
+            color: var(--pv-white);
+            text-shadow: 0 0 15px rgba(0, 229, 255, 0.6);
+            line-height: 1;
+        }
+
+        .ticket-count {
+            font-size: 1rem;
+            color: var(--pv-cyan);
+            margin-top: 8px;
+            letter-spacing: 2px;
+            background: rgba(0, 229, 255, 0.1);
+            padding: 2px 15px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .input-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .field label {
+            font-size: 0.65rem;
+            color: var(--pv-cyan);
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(0, 229, 255, 0.2);
+            color: #fff;
+            padding: 10px;
+            font-size: 1.1rem;
+            font-family: 'Chakra Petch', sans-serif;
+            transition: all 0.3s;
+        }
+
+        input:focus {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--pv-cyan);
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.3);
+            outline: none;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            background: var(--pv-glass);
+            border: 1px solid rgba(0, 229, 255, 0.2);
+            color: var(--pv-white);
+            padding: 10px 5px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.2s;
+            clip-path: polygon(10% 0, 100% 0, 90% 100%, 0 100%);
+        }
+
+        .btn:hover {
+            background: var(--pv-cyan);
+            color: var(--pv-dark-bg);
+            border-color: var(--pv-cyan);
+        }
+
+        .result-panel {
+            background: linear-gradient(90deg, rgba(0, 229, 255, 0.1), transparent);
+            border-left: 4px solid var(--pv-cyan);
+            padding: 15px;
+            margin-top: 10px;
+            position: relative;
+            transition: all 0.4s ease;
+        }
+
+        .result-label {
+            font-size: 0.7rem;
+            display: block;
+            margin-bottom: 4px;
+            opacity: 0.8;
+            font-weight: 700;
+        }
+
+        .result-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--pv-white);
+        }
+
+        .status-tag {
+            float: right;
+            font-size: 0.65rem;
+            padding: 3px 10px;
+            border: 1px solid transparent;
+            margin-top: 3px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            transition: all 0.4s ease;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+
+        footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 0.6rem;
+            color: rgba(0, 229, 255, 0.3);
+            letter-spacing: 2px;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="header">
+        <div class="header-title">STEEL CONTINENT ASSAULT</div>
+        <div style="font-size: 0.6rem; opacity: 0.6; text-align: right;">SYSTEM: ONLINE<br>PROPHET: MALKUTH</div>
+    </div>
+
+    <div class="timer-section">
+        <div class="gauge-container">
+            <svg class="gauge-svg" width="240" height="240">
+                <defs>
+                    <linearGradient id="pv-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:var(--pv-cyan);stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:var(--pv-blue);stop-opacity:1" />
+                    </linearGradient>
+                </defs>
+                <circle class="gauge-bg" cx="120" cy="120" r="110"></circle>
+                <circle id="progress-ring" class="gauge-progress" cx="120" cy="120" r="110" stroke-dasharray="691" stroke-dashoffset="691"></circle>
+            </svg>
+            <div class="timer-info">
+                <span style="font-size: 0.6rem; letter-spacing: 4px; opacity: 0.7;">ESTIMATED FULL</span>
+                <span id="display-time" class="clock-main">00:00:00</span>
+                <span id="display-count" class="ticket-count">0 / 40</span>
+                <div id="next-recovery-small" style="font-size: 0.6rem; margin-top: 5px; opacity: 0.5;">NEXT: 00:00</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="btn-row">
+        <button class="btn" onclick="addTicket(-1)">-1 TICKET</button>
+        <button class="btn" onclick="addTicket(1)">+1 TICKET</button>
+        <button class="btn" style="border-color: var(--pv-orange); color: var(--pv-orange);" onclick="setVal(0)">RESET</button>
+        <button class="btn" onclick="setVal(40)">FULL</button>
+    </div>
+
+    <div class="input-group">
+        <div class="field">
+            <label>Current Tickets</label>
+            <input type="number" id="in-current" value="10" min="0" max="40">
+        </div>
+        <div class="field">
+            <label>Next Regen (m:s)</label>
+            <div style="display: flex; gap: 2px;">
+                <input type="number" id="in-next-m" value="30" min="0" max="30" style="width: 50%;">
+                <input type="number" id="in-next-s" value="0" min="0" max="59" style="width: 50%;">
+            </div>
+        </div>
+    </div>
+
+    <div class="field" style="margin-bottom: 20px;">
+        <label>Operation Runs (20 tickets/run)</label>
+        <input type="number" id="in-target" value="1" min="0">
+    </div>
+
+    <div class="result-panel" id="res-panel">
+        <span class="status-tag" id="shortage-tag">CALCULATING...</span>
+        <span class="result-label">RESOURCE REQUIREMENT</span>
+        <div id="result-text" class="result-value">0 TICKETS NEEDED</div>
+    </div>
+
+    <footer>CONNECTED TO SCHALE STRATEGIC NETWORK // ASSAULT_DIV</footer>
+</div>
+
+<script>
+    const MAX = 40;
+    const REGEN_TIME_MIN = 30; 
+    const ring = document.getElementById('progress-ring');
+    const circ = 2 * Math.PI * 110;
+
+    let timeToNextSec = 30 * 60; 
+
+    function setVal(v) {
+        document.getElementById('in-current').value = v;
+        if (v < MAX) {
+            timeToNextSec = REGEN_TIME_MIN * 60;
+            updateInputFromSec();
+        }
+        update();
+    }
+
+    function addTicket(v) {
+        let cur = parseInt(document.getElementById('in-current').value) || 0;
+        let nextVal = Math.max(0, Math.min(MAX, cur + v));
+        document.getElementById('in-current').value = nextVal;
+        
+        if (cur === MAX && nextVal < MAX) {
+            timeToNextSec = REGEN_TIME_MIN * 60;
+            updateInputFromSec();
+        }
+        update();
+    }
+
+    function updateInputFromSec() {
+        document.getElementById('in-next-m').value = Math.floor(timeToNextSec / 60);
+        document.getElementById('in-next-s').value = timeToNextSec % 60;
+    }
+
+    function onTimerInputChange() {
+        const m = parseInt(document.getElementById('in-next-m').value) || 0;
+        const s = parseInt(document.getElementById('in-next-s').value) || 0;
+        timeToNextSec = (m * 60) + s;
+        update();
+    }
+
+    function tick() {
+        const cur = parseInt(document.getElementById('in-current').value) || 0;
+        
+        if (cur < MAX) {
+            if (timeToNextSec > 0) {
+                timeToNextSec--;
+            } else {
+                document.getElementById('in-current').value = cur + 1;
+                timeToNextSec = (REGEN_TIME_MIN * 60) - 1;
+            }
+            updateInputFromSec();
+        } else {
+            timeToNextSec = REGEN_TIME_MIN * 60; 
+            updateInputFromSec();
+        }
+        update();
+    }
+
+    function update() {
+        const cur = Math.min(MAX, parseInt(document.getElementById('in-current').value) || 0);
+        const target = parseInt(document.getElementById('in-target').value) || 0;
+        const needed = target * 20;
+
+        document.getElementById('display-count').innerText = `${cur} / ${MAX}`;
+        
+        const percent = (cur / MAX) * 100;
+        ring.style.strokeDashoffset = circ - (percent / 100) * circ;
+
+        if (cur >= MAX) {
+            document.getElementById('display-time').innerText = "LIMIT";
+            document.getElementById('next-recovery-small').innerText = "SYSTEM STANDBY";
+        } else {
+            const remainTickets = MAX - cur;
+            const totalSecUntilFull = timeToNextSec + ((remainTickets - 1) * REGEN_TIME_MIN * 60);
+            
+            const h = Math.floor(totalSecUntilFull / 3600);
+            const m = Math.floor((totalSecUntilFull % 3600) / 60);
+            const s = totalSecUntilFull % 60;
+            
+            document.getElementById('display-time').innerText = 
+                `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            
+            const nextM = Math.floor(timeToNextSec / 60);
+            const nextS = timeToNextSec % 60;
+            document.getElementById('next-recovery-small').innerText = 
+                `NEXT REGEN: ${nextM.toString().padStart(2,'0')}:${nextS.toString().padStart(2,'0')}`;
+        }
+
+        const shortage = Math.max(0, needed - cur);
+        document.getElementById('result-text').innerText = `${needed} TICKETS TOTAL`;
+        
+        const tag = document.getElementById('shortage-tag');
+        const panel = document.getElementById('res-panel');
+
+        if (shortage > 0) {
+            tag.innerText = `SHORTAGE: ${shortage}`;
+            tag.style.backgroundColor = "rgba(255, 61, 0, 0.2)";
+            tag.style.borderColor = "var(--pv-red)";
+            tag.style.color = "#ff8a65"; 
+            tag.style.textShadow = "0 0 10px var(--pv-red)";
+            tag.style.boxShadow = "0 0 15px rgba(255, 61, 0, 0.3)";
+            panel.style.borderLeftColor = "var(--pv-red)";
+            panel.style.background = "linear-gradient(90deg, rgba(255, 61, 0, 0.15), transparent)";
+        } else {
+            tag.innerText = "STABLE";
+            tag.style.backgroundColor = "rgba(0, 255, 136, 0.15)";
+            tag.style.borderColor = "var(--pv-green)";
+            tag.style.color = "#b9ffd8";
+            tag.style.textShadow = "0 0 10px var(--pv-green)";
+            tag.style.boxShadow = "0 0 15px rgba(0, 255, 136, 0.2)";
+            panel.style.borderLeftColor = "var(--pv-green)";
+            panel.style.background = "linear-gradient(90deg, rgba(0, 255, 136, 0.1), transparent)";
+        }
+    }
+
+    document.getElementById('in-current').addEventListener('input', update);
+    document.getElementById('in-next-m').addEventListener('input', onTimerInputChange);
+    document.getElementById('in-next-s').addEventListener('input', onTimerInputChange);
+    document.getElementById('in-target').addEventListener('input', update);
+
+    setInterval(tick, 1000);
+    window.onload = update;
+</script>
+</body>
+</html>
