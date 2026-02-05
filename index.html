@@ -237,6 +237,14 @@
             letter-spacing: 2px;
         }
 
+        #save-status {
+            position: absolute;
+            bottom: 5px;
+            right: 15px;
+            font-size: 0.5rem;
+            opacity: 0.5;
+        }
+
     </style>
 </head>
 <body>
@@ -300,71 +308,161 @@
         <div id="result-text" class="result-value">0 TICKETS NEEDED</div>
     </div>
 
-    <footer>&copy; 2026 STEEL CONTINENT ASSAULT TICKET</footer>
+    <footer>
+        &copy; 2026 STEEL CONTINENT ASSAULT TICKET
+        <div id="save-status">SYNCING...</div>
+    </footer>
 </div>
 
-<script>
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // --- Firebase Setup ---
+    const firebaseConfig = JSON.parse(__firebase_config);
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
     const MAX = 40;
     const REGEN_TIME_MIN = 30; 
+    const REGEN_TIME_SEC = REGEN_TIME_MIN * 60;
     const ring = document.getElementById('progress-ring');
     const circ = 2 * Math.PI * 110;
 
-    let timeToNextSec = 30 * 60; 
+    let timeToNextSec = REGEN_TIME_SEC;
+    let userId = null;
+    let isInitialLoad = true;
+    let lastSaveTime = Date.now();
 
-    function setVal(v) {
-        document.getElementById('in-current').value = v;
-        if (v < MAX) {
-            timeToNextSec = REGEN_TIME_MIN * 60;
-            updateInputFromSec();
+    // UI elements
+    const inputCurrent = document.getElementById('in-current');
+    const inputNextM = document.getElementById('in-next-m');
+    const inputNextS = document.getElementById('in-next-s');
+    const inputTarget = document.getElementById('in-target');
+    const saveStatus = document.getElementById('save-status');
+
+    // --- Persistence Logic ---
+
+    async function saveData() {
+        if (!userId) return;
+        try {
+            const data = {
+                current: parseInt(inputCurrent.value) || 0,
+                timeToNextSec: timeToNextSec,
+                targetRuns: parseInt(inputTarget.value) || 0,
+                updatedAt: Date.now()
+            };
+            await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'gameState', 'data'), data);
+            saveStatus.innerText = "CLOUD SAVED";
+        } catch (e) {
+            console.error("Save failed", e);
+            saveStatus.innerText = "SAVE ERROR";
         }
+    }
+
+    function loadData(data) {
+        if (!data) return;
+        
+        const now = Date.now();
+        const elapsedSec = Math.floor((now - data.updatedAt) / 1000);
+        
+        let current = data.current;
+        let remainingNextSec = data.timeToNextSec - elapsedSec;
+
+        // 回復計算
+        if (current < MAX) {
+            while (remainingNextSec <= 0 && current < MAX) {
+                current++;
+                if (current < MAX) {
+                    remainingNextSec += REGEN_TIME_SEC;
+                } else {
+                    remainingNextSec = REGEN_TIME_SEC;
+                }
+            }
+        } else {
+            remainingNextSec = REGEN_TIME_SEC;
+        }
+
+        inputCurrent.value = current;
+        timeToNextSec = Math.max(0, remainingNextSec);
+        inputTarget.value = data.targetRuns || 0;
+        
+        updateInputFromSec();
         update();
     }
 
-    function addTicket(v) {
-        let cur = parseInt(document.getElementById('in-current').value) || 0;
+    // --- Core UI Logic ---
+
+    window.setVal = (v) => {
+        inputCurrent.value = v;
+        if (v < MAX) {
+            timeToNextSec = REGEN_TIME_SEC;
+            updateInputFromSec();
+        }
+        update();
+        saveData();
+    };
+
+    window.addTicket = (v) => {
+        let cur = parseInt(inputCurrent.value) || 0;
         let nextVal = Math.max(0, Math.min(MAX, cur + v));
-        document.getElementById('in-current').value = nextVal;
+        inputCurrent.value = nextVal;
         
         if (cur === MAX && nextVal < MAX) {
-            timeToNextSec = REGEN_TIME_MIN * 60;
+            timeToNextSec = REGEN_TIME_SEC;
             updateInputFromSec();
         }
         update();
-    }
+        saveData();
+    };
 
     function updateInputFromSec() {
-        document.getElementById('in-next-m').value = Math.floor(timeToNextSec / 60);
-        document.getElementById('in-next-s').value = timeToNextSec % 60;
+        inputNextM.value = Math.floor(timeToNextSec / 60);
+        inputNextS.value = timeToNextSec % 60;
     }
 
     function onTimerInputChange() {
-        const m = parseInt(document.getElementById('in-next-m').value) || 0;
-        const s = parseInt(document.getElementById('in-next-s').value) || 0;
+        const m = parseInt(inputNextM.value) || 0;
+        const s = parseInt(inputNextS.value) || 0;
         timeToNextSec = (m * 60) + s;
         update();
+        // 入力中の保存は少し遅延させるか、確定時のみにするのが良い
     }
 
     function tick() {
-        const cur = parseInt(document.getElementById('in-current').value) || 0;
-        
+        const cur = parseInt(inputCurrent.value) || 0;
+        let changed = false;
+
         if (cur < MAX) {
             if (timeToNextSec > 0) {
                 timeToNextSec--;
             } else {
-                document.getElementById('in-current').value = cur + 1;
-                timeToNextSec = (REGEN_TIME_MIN * 60) - 1;
+                inputCurrent.value = cur + 1;
+                timeToNextSec = REGEN_TIME_SEC - 1;
+                changed = true;
             }
             updateInputFromSec();
+            
+            // 30秒ごとにバックアップ保存
+            if (Date.now() - lastSaveTime > 30000) {
+                saveData();
+                lastSaveTime = Date.now();
+            }
         } else {
-            timeToNextSec = REGEN_TIME_MIN * 60; 
+            timeToNextSec = REGEN_TIME_SEC;
             updateInputFromSec();
         }
         update();
+        
+        if (changed) saveData();
     }
 
     function update() {
-        const cur = Math.min(MAX, parseInt(document.getElementById('in-current').value) || 0);
-        const target = parseInt(document.getElementById('in-target').value) || 0;
+        const cur = Math.min(MAX, parseInt(inputCurrent.value) || 0);
+        const target = parseInt(inputTarget.value) || 0;
         const needed = target * 20;
 
         document.getElementById('display-count').innerText = `${cur} / ${MAX}`;
@@ -377,7 +475,7 @@
             document.getElementById('next-recovery-small').innerText = "SYSTEM STANDBY";
         } else {
             const remainTickets = MAX - cur;
-            const totalSecUntilFull = timeToNextSec + ((remainTickets - 1) * REGEN_TIME_MIN * 60);
+            const totalSecUntilFull = timeToNextSec + ((remainTickets - 1) * REGEN_TIME_SEC);
             
             const h = Math.floor(totalSecUntilFull / 3600);
             const m = Math.floor((totalSecUntilFull % 3600) / 60);
@@ -419,13 +517,37 @@
         }
     }
 
-    document.getElementById('in-current').addEventListener('input', update);
-    document.getElementById('in-next-m').addEventListener('input', onTimerInputChange);
-    document.getElementById('in-next-s').addEventListener('input', onTimerInputChange);
-    document.getElementById('in-target').addEventListener('input', update);
+    // --- Init ---
 
-    setInterval(tick, 1000);
-    window.onload = update;
+    onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+            saveStatus.innerText = "AUTH...";
+            await signInAnonymously(auth);
+            return;
+        }
+        
+        userId = user.uid;
+        saveStatus.innerText = "CONNECTED";
+
+        // 初回ロード
+        const docRef = doc(db, 'artifacts', appId, 'users', userId, 'gameState', 'data');
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+            loadData(docSnap.data());
+        } else {
+            update();
+        }
+        
+        isInitialLoad = false;
+        setInterval(tick, 1000);
+    });
+
+    inputCurrent.addEventListener('change', () => { update(); saveData(); });
+    inputNextM.addEventListener('change', () => { onTimerInputChange(); saveData(); });
+    inputNextS.addEventListener('change', () => { onTimerInputChange(); saveData(); });
+    inputTarget.addEventListener('change', () => { update(); saveData(); });
+
 </script>
 </body>
 </html>
