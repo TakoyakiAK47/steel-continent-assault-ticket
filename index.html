@@ -269,7 +269,7 @@
             </svg>
             <div class="timer-info">
                 <span style="font-size: 0.6rem; letter-spacing: 4px; opacity: 0.7;">ESTIMATED FULL</span>
-                <span id="display-time" class="clock-main">00:00:00</span>
+                <span id="display-time" class="clock-main">--:--:--</span>
                 <span id="display-count" class="ticket-count">0 / 40</span>
                 <div id="next-recovery-small" style="font-size: 0.6rem; margin-top: 5px; opacity: 0.5;">NEXT: 00:00</div>
             </div>
@@ -303,21 +303,21 @@
     </div>
 
     <div class="result-panel" id="res-panel">
-        <span class="status-tag" id="shortage-tag">CALCULATING...</span>
+        <span class="status-tag" id="shortage-tag">READY</span>
         <span class="result-label">RESOURCE REQUIREMENT</span>
-        <div id="result-text" class="result-value">0 TICKETS NEEDED</div>
+        <div id="result-text" class="result-value">--- TICKETS TOTAL</div>
     </div>
 
     <footer>
         &copy; 2026 STEEL CONTINENT ASSAULT TICKET
-        <div id="save-status">SYNCING...</div>
+        <div id="save-status">LOCAL MODE</div>
     </footer>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // --- Firebase Setup ---
     const firebaseConfig = JSON.parse(__firebase_config);
@@ -334,7 +334,6 @@
 
     let timeToNextSec = REGEN_TIME_SEC;
     let userId = null;
-    let isInitialLoad = true;
     let lastSaveTime = Date.now();
 
     // UI elements
@@ -344,120 +343,11 @@
     const inputTarget = document.getElementById('in-target');
     const saveStatus = document.getElementById('save-status');
 
-    // --- Persistence Logic ---
-
-    async function saveData() {
-        if (!userId) return;
-        try {
-            const data = {
-                current: parseInt(inputCurrent.value) || 0,
-                timeToNextSec: timeToNextSec,
-                targetRuns: parseInt(inputTarget.value) || 0,
-                updatedAt: Date.now()
-            };
-            await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'gameState', 'data'), data);
-            saveStatus.innerText = "CLOUD SAVED";
-        } catch (e) {
-            console.error("Save failed", e);
-            saveStatus.innerText = "SAVE ERROR";
-        }
-    }
-
-    function loadData(data) {
-        if (!data) return;
-        
-        const now = Date.now();
-        const elapsedSec = Math.floor((now - data.updatedAt) / 1000);
-        
-        let current = data.current;
-        let remainingNextSec = data.timeToNextSec - elapsedSec;
-
-        // 回復計算
-        if (current < MAX) {
-            while (remainingNextSec <= 0 && current < MAX) {
-                current++;
-                if (current < MAX) {
-                    remainingNextSec += REGEN_TIME_SEC;
-                } else {
-                    remainingNextSec = REGEN_TIME_SEC;
-                }
-            }
-        } else {
-            remainingNextSec = REGEN_TIME_SEC;
-        }
-
-        inputCurrent.value = current;
-        timeToNextSec = Math.max(0, remainingNextSec);
-        inputTarget.value = data.targetRuns || 0;
-        
-        updateInputFromSec();
-        update();
-    }
-
-    // --- Core UI Logic ---
-
-    window.setVal = (v) => {
-        inputCurrent.value = v;
-        if (v < MAX) {
-            timeToNextSec = REGEN_TIME_SEC;
-            updateInputFromSec();
-        }
-        update();
-        saveData();
-    };
-
-    window.addTicket = (v) => {
-        let cur = parseInt(inputCurrent.value) || 0;
-        let nextVal = Math.max(0, Math.min(MAX, cur + v));
-        inputCurrent.value = nextVal;
-        
-        if (cur === MAX && nextVal < MAX) {
-            timeToNextSec = REGEN_TIME_SEC;
-            updateInputFromSec();
-        }
-        update();
-        saveData();
-    };
+    // --- Core Logic (Independent of Firebase) ---
 
     function updateInputFromSec() {
         inputNextM.value = Math.floor(timeToNextSec / 60);
         inputNextS.value = timeToNextSec % 60;
-    }
-
-    function onTimerInputChange() {
-        const m = parseInt(inputNextM.value) || 0;
-        const s = parseInt(inputNextS.value) || 0;
-        timeToNextSec = (m * 60) + s;
-        update();
-        // 入力中の保存は少し遅延させるか、確定時のみにするのが良い
-    }
-
-    function tick() {
-        const cur = parseInt(inputCurrent.value) || 0;
-        let changed = false;
-
-        if (cur < MAX) {
-            if (timeToNextSec > 0) {
-                timeToNextSec--;
-            } else {
-                inputCurrent.value = cur + 1;
-                timeToNextSec = REGEN_TIME_SEC - 1;
-                changed = true;
-            }
-            updateInputFromSec();
-            
-            // 30秒ごとにバックアップ保存
-            if (Date.now() - lastSaveTime > 30000) {
-                saveData();
-                lastSaveTime = Date.now();
-            }
-        } else {
-            timeToNextSec = REGEN_TIME_SEC;
-            updateInputFromSec();
-        }
-        update();
-        
-        if (changed) saveData();
     }
 
     function update() {
@@ -517,36 +407,138 @@
         }
     }
 
-    // --- Init ---
+    function tick() {
+        const cur = parseInt(inputCurrent.value) || 0;
+        let changed = false;
 
-    onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-            saveStatus.innerText = "AUTH...";
-            await signInAnonymously(auth);
+        if (cur < MAX) {
+            if (timeToNextSec > 0) {
+                timeToNextSec--;
+            } else {
+                inputCurrent.value = cur + 1;
+                timeToNextSec = REGEN_TIME_SEC - 1;
+                changed = true;
+            }
+            updateInputFromSec();
+        } else {
+            timeToNextSec = REGEN_TIME_SEC;
+            updateInputFromSec();
+        }
+        
+        update();
+        
+        // 30秒ごとに自動保存
+        if (Date.now() - lastSaveTime > 30000 || changed) {
+            saveData();
+            lastSaveTime = Date.now();
+        }
+    }
+
+    // --- Persistence ---
+
+    async function saveData() {
+        if (!userId) return;
+        try {
+            const data = {
+                current: parseInt(inputCurrent.value) || 0,
+                timeToNextSec: timeToNextSec,
+                targetRuns: parseInt(inputTarget.value) || 0,
+                updatedAt: Date.now()
+            };
+            await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'gameState', 'data'), data);
+            saveStatus.innerText = "SYNCED";
+        } catch (e) {
+            saveStatus.innerText = "OFFLINE";
+        }
+    }
+
+    function loadData(data) {
+        if (!data) return;
+        const now = Date.now();
+        const elapsedSec = Math.floor((now - (data.updatedAt || now)) / 1000);
+        let current = data.current || 0;
+        let remainingNextSec = (data.timeToNextSec || REGEN_TIME_SEC) - elapsedSec;
+
+        if (current < MAX) {
+            while (remainingNextSec <= 0 && current < MAX) {
+                current++;
+                remainingNextSec += REGEN_TIME_SEC;
+            }
+        }
+        inputCurrent.value = Math.min(MAX, current);
+        timeToNextSec = current >= MAX ? REGEN_TIME_SEC : Math.max(0, remainingNextSec);
+        inputTarget.value = data.targetRuns || 0;
+        updateInputFromSec();
+        update();
+    }
+
+    // --- Handlers ---
+
+    window.setVal = (v) => {
+        inputCurrent.value = v;
+        timeToNextSec = REGEN_TIME_SEC;
+        updateInputFromSec();
+        update();
+        saveData();
+    };
+
+    window.addTicket = (v) => {
+        let cur = parseInt(inputCurrent.value) || 0;
+        inputCurrent.value = Math.max(0, Math.min(MAX, cur + v));
+        if (cur >= MAX && parseInt(inputCurrent.value) < MAX) {
+            timeToNextSec = REGEN_TIME_SEC;
+            updateInputFromSec();
+        }
+        update();
+        saveData();
+    };
+
+    // --- Initialization ---
+
+    // 認証とロードの開始
+    const initApp = async () => {
+        // 1. まずローカルで動かす
+        update();
+        setInterval(tick, 1000);
+
+        // 2. 認証開始
+        try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        } catch (e) {
+            saveStatus.innerText = "AUTH ERROR";
             return;
         }
-        
-        userId = user.uid;
-        saveStatus.innerText = "CONNECTED";
 
-        // 初回ロード
-        const docRef = doc(db, 'artifacts', appId, 'users', userId, 'gameState', 'data');
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-            loadData(docSnap.data());
-        } else {
-            update();
-        }
-        
-        isInitialLoad = false;
-        setInterval(tick, 1000);
-    });
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) return;
+            userId = user.uid;
+            saveStatus.innerText = "LOADING...";
+            
+            try {
+                const docSnap = await getDoc(doc(db, 'artifacts', appId, 'users', userId, 'gameState', 'data'));
+                if (docSnap.exists()) {
+                    loadData(docSnap.data());
+                    saveStatus.innerText = "CONNECTED";
+                } else {
+                    saveStatus.innerText = "NEW SESSION";
+                    saveData();
+                }
+            } catch (e) {
+                saveStatus.innerText = "SYNC ERROR";
+            }
+        });
+    };
 
-    inputCurrent.addEventListener('change', () => { update(); saveData(); });
-    inputNextM.addEventListener('change', () => { onTimerInputChange(); saveData(); });
-    inputNextS.addEventListener('change', () => { onTimerInputChange(); saveData(); });
-    inputTarget.addEventListener('change', () => { update(); saveData(); });
+    inputCurrent.addEventListener('input', update);
+    inputNextM.addEventListener('input', () => { timeToNextSec = (parseInt(inputNextM.value) || 0) * 60 + (parseInt(inputNextS.value) || 0); update(); });
+    inputNextS.addEventListener('input', () => { timeToNextSec = (parseInt(inputNextM.value) || 0) * 60 + (parseInt(inputNextS.value) || 0); update(); });
+    inputTarget.addEventListener('input', update);
+
+    initApp();
 
 </script>
 </body>
